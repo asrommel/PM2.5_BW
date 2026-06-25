@@ -80,16 +80,16 @@ PM2.5_BW/
   - `mean_srei_genc.csv` – Structural racism effect index
 
 ### Execution
+
+The complete analysis is contained in a single R script:
+
 ```r
-source("scripts/00_setup.R")      # Load libraries, set paths
-source("scripts/01_data_processing.R")  # Prepare analytic dataset
-source("scripts/02_analysis.R")    # Primary BDLIM analyses
-source("scripts/03_sensitivity.R") # Sensitivity analyses
-source("scripts/04_tables_figures.R") # Generate outputs
+source("scripts/analysis.R")
 ```
 
-**Estimated runtime:** ~1–2 hours (BDLIM sampling is intensive)
+Or open the script in RStudio and run it section by section. Sections are clearly marked with `########################################` comments.
 
+**Estimated runtime:** ~1–2 hours (BDLIM sampling is intensive)
 ---
 
 ## Analysis Overview
