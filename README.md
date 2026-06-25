@@ -45,26 +45,26 @@ PM2.5_BW/
 - `mice` – multiple imputation
 - Data handling: `dplyr`, `tidyr`, `readr`, `fst`
 - Visualization: `ggplot2`, `flextable`, `gt`
-- Spatial: `sf` (if applicable)
 
 ### Installing Required Packages
 
-1. **Restore environment** (recommended for exact reproducibility):
-   ```r
-   install.packages("renv")
-   renv::restore()
-   ```
+1. **Install from CRAN:**
+```r
+   install.packages(c("dplyr", "tidyr", "readr", "lubridate", "fst", 
+                      "stringr", "mice", "ggplot2", "janitor", "forcats", 
+                      "zoo", "scales", "flextable", "officer", "ggtext", "gt"))
+```
 
-2. **Manual install** (if renv unavailable):
-   ```r
-   # CRAN packages
-   install.packages(c("dplyr", "tidyr", "readr", "ggplot2", 
-                      "mice", "flextable", "officer", "gt"))
-   
-   # From GitHub
+2. **Install from GitHub:**
+```r
+   remotes::install_github("AnderWilson/bdlim")
    remotes::install_github("ki-tools/growthstandards")
-   remotes::install_github("[bdlim-repo-location]")
-   ```
+```
+
+3. **Or use renv to restore the exact environment:**
+```r
+   renv::restore()
+```
 
 ---
 
