@@ -1,0 +1,33 @@
+cff-version: 1.2.0
+type: software
+title: "Air Pollution and Birthweight in New York City: Analysis Code"
+message: "If you use this code in your research, please cite it as follows:"
+
+authors:
+  - family-names: "Tubassum"
+    given-names: "Raida"
+  - family-names: "Li"
+    given-names: "Mengling"
+  - family-names: "Boychuk"
+    given-names: "Nina"
+  - family-names: "Milazzo"
+    given-names: "Francesco"
+  - family-names: "Lee"
+    given-names: "Audrey"
+  - family-names: "Janevic"
+    given-names: "Tamara"
+  - family-names: "Rommel"
+    given-names: "Anna-Sophie"
+    orcid: "https://orcid.org/0000-0003-4121-8631"
+
+repository-code: "https://github.com/asrommel/PM2.5_BW"
+keywords:
+  - "air pollution"
+  - "PM2.5"
+  - "birthweight"
+  - "environmental epidemiology"
+
+abstract: "R code for analyzing associations between prenatal PM2.5 exposure and birthweight-for-gestational-age z-scores in the Generation C birth cohort, with examination of effect modification by neighborhood structural disadvantage."
+
+license: "CC-BY-4.0"
+date-released: 2026-06-25
