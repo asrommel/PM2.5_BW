@@ -87,9 +87,10 @@ The complete analysis is contained in a single R script:
 source("scripts/analysis.R")
 ```
 
-Or open the script in RStudio and run it section by section. Sections are clearly marked with `########################################` comments.
+Or open `scripts/analysis.R` in RStudio and run it section by section. Sections are clearly marked with `########################################` comments.
 
 **Estimated runtime:** ~1–2 hours (BDLIM sampling is intensive)
+
 ---
 
 ## Analysis Overview
