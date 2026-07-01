@@ -98,7 +98,7 @@ source("scripts/analysis.R")
 
 Or open `scripts/analysis.R` in RStudio and run it section by section. Sections are clearly marked with `########################################` comments.
 
-**Estimated runtime:** several hours. The script fits 11 BDLIM models in total (2 primary, 5 across imputed datasets, 2 restricted to 2021–2022 births, 2 restricted to complete-case exposure series), most at 50,000 iterations. Actual runtime will depend on your hardware; time a full run once and update this estimate accordingly.
+**Estimated runtime:** 1-2 hours. The script fits 11 BDLIM models in total (2 primary, 5 across imputed datasets, 2 restricted to 2021–2022 births, 2 restricted to complete-case exposure series), most at 50,000 iterations. Actual runtime will depend on your hardware; time a full run once and update this estimate accordingly.
 
 ---
 
