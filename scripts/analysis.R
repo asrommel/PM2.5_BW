@@ -16,8 +16,8 @@
 # install.packages("remotes")
 # remotes::install_github("ki-tools/growthstandards")
 #
-# Additional package:
-# install.packages("zoo")
+# Additional packages:
+# install.packages(c("zoo", "EValue", "tableone", "WeightIt", "here"))
 
 suppressPackageStartupMessages({
   library(here)
@@ -40,6 +40,9 @@ suppressPackageStartupMessages({
   library(ggtext)
   library(gt)
   library(grid)
+  library(EValue)
+  library(tableone)
+  library(WeightIt)
 })
 
 options(dplyr.summarise.inform = FALSE)
@@ -736,37 +739,8 @@ print(summary(fit_adj))
 plot(summary(fit_adj))
 
 ########################################
-## Sensitivity analysis: linear regression
-## with pregnancy-average PM2.5
-########################################
-
-preg_avg_sens <- preg_avg %>%
-  filter(subject_id %in% keep_ids) %>%
-  arrange(subject_id) %>%
-  left_join(
-    dat %>%
-      dplyr::select(
-        subject_id, bw_z_intergrowth, age,
-        bmi, parity, maritalstatus,
-        insurance, season, year
-      ),
-    by = "subject_id"
-  )
-
-# Unadjusted
-lm_z_unadj <- lm(bw_z_intergrowth ~ preg_avg_pm25, data = preg_avg_sens)
-summary(lm_z_unadj)
-
-# Adjusted
-lm_z_adj <- lm(
-  bw_z_intergrowth ~ preg_avg_pm25 + bmi + parity + age +
-    maritalstatus + insurance + season + year,
-  data = preg_avg_sens
-)
-summary(lm_z_adj)
-
-########################################
-## Sensitivity analysis across imputed datasets
+## Sensitivity: results across imputed datasets
+## (Supplementary eTable 1)
 ########################################
 
 cum_list <- vector("list", 5)
@@ -782,7 +756,7 @@ dat_base <- dat %>%
 
 for (i in 1:5) {
   cat("Running imputation", i, "\n")
-
+  
   covar_imp_i <- complete(imp_subj, i) %>%
     arrange(subject_id) %>%
     mutate(
@@ -829,15 +803,15 @@ for (i in 1:5) {
     dplyr::select(
       subject_id, srei1, bmi, age, parity, maritalstatus, insurance, season, year
     )
-
+  
   dat_i <- dat_base %>%
     left_join(covar_imp_i, by = "subject_id") %>%
     arrange(subject_id)
-
+  
   Y_i <- dat_i$bw_z_intergrowth
   X_i <- dat_i %>% dplyr::select(all_of(wk_cols)) %>% as.matrix()
   G_i <- as.factor(dat_i$srei1)
-
+  
   fit_i <- bdlim4(
     y        = Y_i,
     exposure = X_i,
@@ -851,19 +825,15 @@ for (i in 1:5) {
     nthin    = 10,
     parallel = FALSE
   )
-
+  
   cum_i <- summary(fit_i)$cumulative %>%
     mutate(imputation = i)
-
+  
   cum_list[[i]] <- cum_i
 }
 
 cum_results <- bind_rows(cum_list)
 print(cum_results)
-
-########################################
-## Supplementary table
-########################################
 
 supp_table_full <- cum_results %>%
   mutate(
@@ -885,7 +855,7 @@ print(supp_table_full)
 
 ft_supp <- flextable(supp_table_full) %>%
   set_caption(
-    "Supplementary Table 1. Cumulative associations between prenatal PM2.5 exposure and BW-for-GA z-scores across multiply imputed datasets"
+    "Supplementary Table 1. Cumulative associations between prenatal PM2.5 exposure and BW-for-GA z-scores across multiply imputed datasets."
   ) %>%
   autofit()
 
@@ -894,8 +864,494 @@ doc_supp <- read_docx() %>%
 
 print(
   doc_supp,
-  target = file.path(dir_tables, "Supplementary_Table_Imputed_Results_Full.docx")
+  target = file.path(dir_tables, "Supplementary_Table1_Imputed.docx")
 )
+
+########################################
+## Sensitivity analysis 1: linear regression with
+## pregnancy-average PM2.5, incl. PM2.5 x SREI interaction
+########################################
+
+preg_avg_sens_int <- preg_avg %>%
+  filter(subject_id %in% keep_ids) %>%
+  arrange(subject_id) %>%
+  left_join(
+    dat %>%
+      dplyr::select(
+        subject_id, bw_z_intergrowth, age, bmi,
+        parity, maritalstatus, insurance, season, year, srei1
+      ),
+    by = "subject_id"
+  )
+
+# Unadjusted
+lm_z_unadj <- lm(bw_z_intergrowth ~ preg_avg_pm25, data = preg_avg_sens_int)
+summary(lm_z_unadj)
+
+# Adjusted
+lm_z_adj <- lm(
+  bw_z_intergrowth ~ preg_avg_pm25 + bmi + parity + age +
+    maritalstatus + insurance + season + year,
+  data = preg_avg_sens_int
+)
+summary(lm_z_adj)
+
+# Adjusted, with PM2.5 x SREI interaction
+lm_z_adj_int <- lm(
+  bw_z_intergrowth ~ preg_avg_pm25 * srei1 + bmi + parity + age +
+    maritalstatus + insurance + season + year,
+  data = preg_avg_sens_int
+)
+summary(lm_z_adj_int)
+
+########################################
+## Sensitivity analysis 2: 2021-2022 births only
+## (excluding pandemic-onset 2020)
+########################################
+
+dat_2122 <- dat %>% filter(year %in% c("2021", "2022"))
+cat("Sample size (2021-2022 births):", nrow(dat_2122), "\n")
+
+Y_2122 <- dat_2122$bw_z_intergrowth
+X_2122 <- dat_2122 %>% dplyr::select(all_of(wk_cols)) %>% as.matrix()
+G_2122 <- as.factor(dat_2122$srei1)
+
+stopifnot(
+  length(Y_2122) == nrow(X_2122),
+  length(G_2122) == nrow(X_2122)
+)
+
+## Unadjusted
+set.seed(123)
+fit_2122_unadj <- bdlim4(
+  y        = Y_2122,
+  exposure = X_2122,
+  covars   = dat_2122[, 0, drop = FALSE],
+  group    = G_2122,
+  df       = 4,
+  nits     = 50000,
+  nthin    = 10,
+  parallel = TRUE
+)
+print(summary(fit_2122_unadj))
+plot(summary(fit_2122_unadj))
+
+## Adjusted (year dropped: only 2021-2022 remain)
+set.seed(123)
+fit_2122_adj <- bdlim4(
+  y        = Y_2122,
+  exposure = X_2122,
+  covars   = dat_2122[, c(
+    "bmi", "age", "parity", "maritalstatus",
+    "insurance", "season"
+  ), drop = FALSE],
+  group    = G_2122,
+  df       = 4,
+  nits     = 50000,
+  nthin    = 10,
+  parallel = TRUE
+)
+print(summary(fit_2122_adj))
+plot(summary(fit_2122_adj))
+
+supp_table_2122 <- bind_rows(
+  summary(fit_2122_unadj)$cumulative %>% mutate(Model = "Unadjusted"),
+  summary(fit_2122_adj)$cumulative   %>% mutate(Model = "Adjusted")
+) %>%
+  transmute(
+    Model,
+    `SREI group` = group,
+    Mean     = round(mean, 4),
+    Median   = round(median, 4),
+    SD       = round(sd, 4),
+    `2.5%`   = round(q2.5, 4),
+    `97.5%`  = round(q97.5, 4),
+    `Pr(>0)` = round(pr_gr0, 2)
+  ) %>%
+  arrange(Model, desc(`SREI group`))
+
+print(supp_table_2122)
+
+ft_2122 <- flextable(supp_table_2122) %>%
+  set_caption(
+    "Supplementary Table 2. Cumulative associations between prenatal PM2.5 exposure and BW-for-GA z-scores, restricted to 2021-2022 births, by SREI group."
+  ) %>%
+  autofit()
+
+doc_2122 <- read_docx() %>%
+  body_add_flextable(ft_2122)
+
+print(doc_2122, target = file.path(dir_tables, "Supplementary_Table2_2021_2022.docx"))
+
+########################################
+## Sensitivity analysis 3: complete cases only
+## (fully observed 37-week exposure series)
+########################################
+
+keep_ids_cc <- setdiff(keep_ids, ids_near_complete)
+dat_cc <- dat %>% filter(subject_id %in% keep_ids_cc)
+cat("Complete-case sample size:", nrow(dat_cc), "\n")
+
+X_cc  <- dat_cc %>% dplyr::select(all_of(wk_cols)) %>% as.matrix()
+Yz_cc <- dat_cc$bw_z_intergrowth
+G_cc  <- as.factor(dat_cc$srei1)
+
+set.seed(123)
+fit_cc_unadj <- bdlim4(
+  y        = Yz_cc,
+  exposure = X_cc,
+  covars   = dat_cc[, 0, drop = FALSE],
+  group    = G_cc,
+  df       = 4,
+  nits     = 50000,
+  nthin    = 10,
+  parallel = TRUE
+)
+summary(fit_cc_unadj)$cumulative
+
+set.seed(123)
+fit_cc_adj <- bdlim4(
+  y        = Yz_cc,
+  exposure = X_cc,
+  covars   = dat_cc[, c(
+    "bmi", "age", "parity", "maritalstatus",
+    "insurance", "season", "year"
+  ), drop = FALSE],
+  group    = G_cc,
+  df       = 4,
+  nits     = 50000,
+  nthin    = 10,
+  parallel = TRUE
+)
+summary(fit_cc_adj)$cumulative
+
+supp_table_cc <- bind_rows(
+  summary(fit_cc_unadj)$cumulative %>% mutate(Model = "Unadjusted"),
+  summary(fit_cc_adj)$cumulative   %>% mutate(Model = "Adjusted")
+) %>%
+  transmute(
+    Model,
+    `SREI group` = group,
+    Mean     = round(mean, 4),
+    Median   = round(median, 4),
+    SD       = round(sd, 4),
+    `2.5%`   = round(q2.5, 4),
+    `97.5%`  = round(q97.5, 4),
+    `Pr(>0)` = round(pr_gr0, 2)
+  ) %>%
+  arrange(Model, desc(`SREI group`))
+
+print(supp_table_cc)
+
+ft_cc <- flextable(supp_table_cc) %>%
+  set_caption(
+    "Supplementary Table 3. Cumulative associations between prenatal PM2.5 exposure and BW-for-GA z-scores, restricted to participants with fully observed 37-week exposure series, by SREI group."
+  ) %>%
+  autofit()
+
+doc_cc <- read_docx() %>%
+  body_add_flextable(ft_cc)
+
+print(doc_cc, target = file.path(dir_tables, "Supplementary_Table3_CompleteCases.docx"))
+
+########################################
+## Sensitivity analysis 4: selection bias comparison + IPW
+########################################
+
+## -- Build included vs. excluded comparison dataset --
+
+race_lookup_full <- birth_data %>%
+  distinct(subject_id, .keep_all = TRUE) %>%
+  dplyr::select(subject_id, raceethnicitycombined)
+
+ids_all_enrolled <- unique(birth_data$subject_id)
+ids_in_overlap   <- df_overlap %>% distinct(subject_id) %>% pull(subject_id)
+ids_excluded_all <- setdiff(ids_all_enrolled, keep_ids)
+ids_no_pm25      <- setdiff(ids_all_enrolled, ids_in_overlap)
+
+cat("Total enrolled: ", length(ids_all_enrolled), "\n")
+cat("Final analytic: ", length(keep_ids), "\n")
+cat("Total excluded: ", length(ids_excluded_all), "\n")
+
+covar_excl_pm25 <- df_overlap %>%
+  filter(subject_id %in% ids_excluded_all) %>%
+  group_by(subject_id) %>%
+  summarise(
+    maternalage     = first_nonNA(maternalage),
+    prepregnancybmi = first_nonNA(prepregnancybmi),
+    parity_cat      = first_nonNA(parity_cat),
+    insurance_cat   = first_nonNA(insurance_cat),
+    maritalstatus   = first_nonNA(maritalstatus),
+    season          = first_nonNA(season),
+    year            = first_nonNA(year_fac),
+    .groups = "drop"
+  ) %>%
+  mutate(had_pm25 = TRUE)
+
+covar_excl_nopm25 <- birth_data %>%
+  filter(subject_id %in% ids_no_pm25) %>%
+  distinct(subject_id, .keep_all = TRUE) %>%
+  mutate(
+    maternalage     = as.numeric(maternalage),
+    prepregnancybmi = as.numeric(prepregnancybmi),
+    year = factor(case_when(
+      birthdate >= ymd("2020-01-01") & birthdate <= ymd("2020-12-31") ~ "2020",
+      birthdate >= ymd("2021-01-01") & birthdate <= ymd("2021-12-31") ~ "2021",
+      birthdate >= ymd("2022-01-01") & birthdate <= ymd("2022-12-31") ~ "2022",
+      TRUE ~ NA_character_
+    ), levels = c("2020", "2021", "2022")),
+    season   = factor(
+      season_from_date(lmp),
+      levels = c("Summer", "Spring", "Autumn", "Winter")
+    ),
+    had_pm25 = FALSE
+  ) %>%
+  dplyr::select(
+    subject_id, maternalage, prepregnancybmi, parity_cat,
+    insurance_cat, maritalstatus, season, year, had_pm25
+  )
+
+covar_excluded_all <- bind_rows(covar_excl_pm25, covar_excl_nopm25) %>%
+  left_join(
+    birth_data %>%
+      distinct(subject_id, .keep_all = TRUE) %>%
+      dplyr::select(subject_id, birthweight_grams, gestationalagedays),
+    by = "subject_id"
+  ) %>%
+  left_join(srei_raw %>% dplyr::select(subject_id, srei), by = "subject_id") %>%
+  left_join(race_lookup_full, by = "subject_id") %>%
+  mutate(group = "Excluded")
+
+covar_included_all <- covar %>%
+  filter(subject_id %in% keep_ids) %>%
+  left_join(
+    birth_data %>%
+      distinct(subject_id, .keep_all = TRUE) %>%
+      dplyr::select(subject_id, birthweight_grams, gestationalagedays),
+    by = "subject_id"
+  ) %>%
+  left_join(race_lookup_full, by = "subject_id") %>%
+  mutate(
+    raceethnicitycombined = coalesce(raceethnicitycombined.x, raceethnicitycombined.y),
+    maternalage     = as.numeric(maternalage),
+    prepregnancybmi = as.numeric(prepregnancybmi),
+    group           = "Included"
+  ) %>%
+  dplyr::select(-raceethnicitycombined.x, -raceethnicitycombined.y)
+
+recode_vars <- function(df) {
+  df %>%
+    mutate(
+      race_label = case_when(
+        as.character(raceethnicitycombined) == "2" ~ "Asian",
+        as.character(raceethnicitycombined) == "3" ~ "Black",
+        as.character(raceethnicitycombined) == "4" ~ "Hispanic",
+        as.character(raceethnicitycombined) == "6" ~ "White",
+        as.character(raceethnicitycombined) == "1" ~ "Unknown",
+        as.character(raceethnicitycombined) %in% c("5", "7", "8") ~ "Other",
+        TRUE ~ "Unknown"
+      ) %>%
+        factor(levels = c("Asian", "Black", "Hispanic", "White", "Other", "Unknown")),
+      parity_cat = factor(
+        parity_cat, levels = c("0", "1"),
+        labels = c("Nulliparous", "Multiparous")
+      ),
+      insurance_cat = factor(
+        as.character(insurance_cat),
+        levels = c("1", "2", "3"),
+        labels = c("Private", "Public", "Self-pay")
+      ) %>%
+        fct_collapse(Private = c("Private", "Self-pay"), Public = "Public"),
+      maritalstatus = factor(
+        as.character(maritalstatus),
+        levels = as.character(1:7),
+        labels = c(
+          "Divorced", "Legally Separated/Separated",
+          "Married/Civil Union", "Significant Other/Life Partner",
+          "Single", "Unknown/Other", "Widowed"
+        )
+      ) %>%
+        fct_collapse(
+          `Legally Separated` = c("Divorced", "Legally Separated/Separated"),
+          `Significant Other` = c("Married/Civil Union", "Significant Other/Life Partner"),
+          Other               = c("Widowed", "Unknown/Other")
+        ) %>%
+        fct_relevel("Significant Other"),
+      season = factor(season, levels = c("Summer", "Spring", "Autumn", "Winter")),
+      year   = factor(as.character(year), levels = c("2020", "2021", "2022"))
+    )
+}
+
+compare_vars <- c(
+  "maternalage", "prepregnancybmi", "parity_cat", "insurance_cat",
+  "maritalstatus", "race_label", "season", "year", "srei",
+  "gestationalagedays", "birthweight_grams"
+)
+cat_vars <- c(
+  "parity_cat", "insurance_cat", "maritalstatus", "race_label", "season", "year"
+)
+cont_nonnormal <- c(
+  "maternalage", "prepregnancybmi", "srei", "gestationalagedays", "birthweight_grams"
+)
+
+combined_all <- bind_rows(covar_included_all, covar_excluded_all) %>%
+  recode_vars() %>%
+  dplyr::select(subject_id, group, any_of(compare_vars))
+
+## -- Table + SMDs --
+
+tab_selection <- CreateTableOne(
+  vars = compare_vars, strata = "group", data = combined_all,
+  factorVars = cat_vars, addOverall = FALSE
+)
+
+compute_smd <- function(data, var, is_cat = FALSE) {
+  inc <- data %>% filter(group == "Included") %>% pull(!!sym(var))
+  exc <- data %>% filter(group == "Excluded") %>% pull(!!sym(var))
+  if (is_cat) {
+    t1 <- prop.table(table(inc)); t2 <- prop.table(table(exc))
+    all_levels <- union(names(t1), names(t2))
+    p1 <- as.numeric(t1[all_levels]); p1[is.na(p1)] <- 0
+    p2 <- as.numeric(t2[all_levels]); p2[is.na(p2)] <- 0
+    denom <- (p1 * (1 - p1) + p2 * (1 - p2)) / 2
+    denom[denom == 0] <- NA
+    sqrt(sum((p1 - p2)^2 / denom, na.rm = TRUE))
+  } else {
+    m1 <- mean(inc, na.rm = TRUE); s1 <- sd(inc, na.rm = TRUE)
+    m2 <- mean(exc, na.rm = TRUE); s2 <- sd(exc, na.rm = TRUE)
+    abs(m1 - m2) / sqrt((s1^2 + s2^2) / 2)
+  }
+}
+
+smd_results <- data.frame(
+  Variable = compare_vars,
+  SMD = round(sapply(compare_vars, function(v) {
+    compute_smd(combined_all, v, is_cat = v %in% cat_vars)
+  }), 3),
+  row.names = NULL
+)
+print(smd_results)
+
+tab_mat <- print(
+  tab_selection, showAllLevels = TRUE, printToggle = FALSE,
+  quote = FALSE, noSpaces = TRUE, nonnormal = cont_nonnormal
+)
+
+smd_vec <- setNames(smd_results$SMD, smd_results$Variable)
+smd_col <- rep(NA_character_, nrow(tab_mat))
+names(smd_col) <- rownames(tab_mat)
+for (v in compare_vars) {
+  match_rows <- grep(paste0("^", v), rownames(tab_mat))
+  if (length(match_rows) > 0) smd_col[match_rows[1]] <- as.character(smd_vec[v])
+}
+
+write.csv(
+  cbind(tab_mat, SMD = smd_col),
+  file.path(dir_tables, "Supplementary_Table4_SelectionBias.csv"),
+  row.names = TRUE
+)
+
+## -- IPW analysis --
+## Note: year of birth is excluded from the propensity score model
+## (near-complete separation: excluded participants disproportionately
+## lack a recorded birth date, reflecting pregnancy loss or delivery
+## outside the study hospital).
+
+covar_eligible <- bind_rows(
+  covar_included_all %>% mutate(included = 1L),
+  covar_excluded_all %>% mutate(included = 0L)
+) %>%
+  recode_vars() %>%
+  mutate(age = as.numeric(maternalage), bmi = as.numeric(prepregnancybmi)) %>%
+  filter(complete.cases(dplyr::select(
+    ., age, bmi, parity_cat, insurance_cat, maritalstatus, season, srei
+  )))
+
+cat("IPW model sample size (complete cases):", nrow(covar_eligible), "\n")
+
+ipw_fit <- weightit(
+  included ~ age + bmi + parity_cat + insurance_cat +
+    maritalstatus + season + srei,
+  data     = covar_eligible,
+  method   = "glm",
+  link     = "logit",
+  estimand = "ATE"
+)
+
+print(summary(ipw_fit))
+print(quantile(ipw_fit$weights, c(0.01, 0.05, 0.25, 0.5, 0.75, 0.95, 0.99), na.rm = TRUE))
+
+cat("Weights >10:", sum(ipw_fit$weights > 10, na.rm = TRUE), "\n")
+cat("Weights >5: ", sum(ipw_fit$weights > 5,  na.rm = TRUE), "\n")
+
+weights_df <- data.frame(
+  subject_id = covar_eligible$subject_id[covar_eligible$included == 1],
+  ipw        = ipw_fit$weights[covar_eligible$included == 1]
+)
+
+dat_ipw <- dat %>%
+  left_join(weights_df, by = "subject_id") %>%
+  left_join(preg_avg %>% filter(subject_id %in% keep_ids), by = "subject_id")
+
+n_dropped_ipw <- sum(is.na(dat_ipw$ipw))
+cat("Participants excluded from IPW-weighted comparison due to missing covariates:",
+    n_dropped_ipw, "\n")
+
+dat_ipw <- dat_ipw %>% filter(!is.na(ipw))
+
+cat("IPW-weighted comparison sample size:", nrow(dat_ipw), "\n")
+
+lm_unweighted <- lm(
+  bw_z_intergrowth ~ preg_avg_pm25 + parity + bmi + age +
+    insurance + maritalstatus + season + year,
+  data = dat_ipw
+)
+lm_ipw <- lm(
+  bw_z_intergrowth ~ preg_avg_pm25 + parity + bmi + age +
+    insurance + maritalstatus + season + year,
+  data = dat_ipw, weights = ipw
+)
+
+format_coef <- function(mod, var) {
+  b <- coef(summary(mod))[var, ]
+  sprintf(
+    "β = %.4f, SE = %.4f, 95%% CI: %.4f, %.4f",
+    b["Estimate"], b["Std. Error"],
+    b["Estimate"] - 1.96 * b["Std. Error"],
+    b["Estimate"] + 1.96 * b["Std. Error"]
+  )
+}
+cat("\n── Unweighted PM2.5 coefficient ──\n")
+cat(format_coef(lm_unweighted, "preg_avg_pm25"), "\n")
+
+cat("\n── IPW-weighted PM2.5 coefficient ──\n")
+cat(format_coef(lm_ipw, "preg_avg_pm25"), "\n")
+
+########################################
+## Sensitivity analysis 5: E-value
+########################################
+
+sd_outcome <- sd(dat$bw_z_intergrowth, na.rm = TRUE)
+cat("SD of BW-for-GA z-score:", sd_outcome, "\n")
+
+fit_summary <- summary(fit_adj)
+
+est_high <- fit_summary$cumulative[fit_summary$cumulative$group == "≥75th percentile", "mean"]
+se_high  <- fit_summary$cumulative[fit_summary$cumulative$group == "≥75th percentile", "sd"]
+est_low  <- fit_summary$cumulative[fit_summary$cumulative$group == "<75th percentile", "mean"]
+se_low   <- fit_summary$cumulative[fit_summary$cumulative$group == "<75th percentile", "sd"]
+
+cat("\nExtracted estimates:\n")
+cat("High disadvantage: mean =", est_high, ", SD =", se_high, "\n")
+cat("Low disadvantage:  mean =", est_low,  ", SD =", se_low,  "\n")
+
+eval_high <- evalues.MD(est = est_high, se = se_high, sd = sd_outcome)
+cat("\nE-value: high structural disadvantage group\n")
+print(eval_high)
+
+eval_low <- evalues.MD(est = est_low, se = se_low, sd = sd_outcome)
+cat("\nE-value: lower structural disadvantage group\n")
+print(eval_low)
 
 ########################################
 ## Table 1 + Flowchart
