@@ -97,7 +97,7 @@ source("scripts/analysis.R")
 
 Or open `scripts/analysis.R` in RStudio and run it section by section. Sections are clearly marked with `########################################` comments.
 
-**Estimated runtime:** ~1–2 hours (tested).
+**Estimated runtime:** ~1–2 hours
 
 ---
 
